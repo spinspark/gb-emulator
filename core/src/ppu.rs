@@ -16,7 +16,6 @@ const MEM_WY: u16 = 0xFF4A;
 const MEM_WX: u16 = 0xFF4B;
 
 const CYCLES_PER_LINE: usize = 456;
-const CYCLES_PER_FRAME: usize = 70224;
 
 #[derive(Debug, Clone, Copy)]
 enum Mode {
@@ -59,7 +58,7 @@ pub struct Ppu {
     sprite_palette_1: u8,
     wy: u8,
     wx: u8,
-    frame_cycles: usize,
+    cycles: usize,
     dma_running: bool,
 }
 
@@ -90,18 +89,43 @@ impl Ppu {
             sprite_palette_1: 0xFF,
             wy: 0,
             wx: 0,
-            frame_cycles: 0,
+            cycles: 0,
             dma_running: false,
         }
     }
 
     pub const fn step(&mut self, interrupt_flags: &mut InterruptFlags, dma_running: bool) {
-        self.frame_cycles = (self.frame_cycles + 4) % CYCLES_PER_FRAME;
-        self.ly = (self.frame_cycles / CYCLES_PER_LINE) as u8;
-        if self.frame_cycles == (144 * CYCLES_PER_LINE) {
+        self.dma_running = dma_running;
+
+        if !self.enabled {
+            return;
+        }
+
+        self.cycles += 4;
+        if (self.ly == 0 && self.cycles == 452) || self.cycles == CYCLES_PER_LINE {
+            self.cycles = 0;
+            self.ly += 1;
+            if self.ly > 153 {
+                self.ly = 0;
+            }
+        }
+
+        if self.ly < 145 && self.cycles == 0 {
+            self.mode = Mode::HBlank;
+        } else if self.ly == 0 && self.cycles == 80 {
+            self.mode = Mode::Draw;
+        } else if self.ly == 0 && self.cycles == 252 {
+            self.mode = Mode::HBlank;
+        } else if self.ly > 0 && self.ly < 144 && self.cycles == 4 {
+            self.mode = Mode::Scan;
+        } else if self.ly > 0 && self.ly < 144 && self.cycles == 84 {
+            self.mode = Mode::Draw;
+        } else if self.ly > 0 && self.ly < 144 && self.cycles == 256 {
+            self.mode = Mode::HBlank;
+        } else if self.ly == 144 && self.cycles == 4 {
+            self.mode = Mode::VBlank;
             interrupt_flags.set(Interrupt::VBlank, true);
         }
-        self.dma_running = dma_running;
     }
 
     pub const fn read_vram(&self, addr: u16) -> u8 {
@@ -214,6 +238,8 @@ impl Ppu {
     }
 
     pub const fn write_lcdc(&mut self, value: u8) {
+        let old_enabled = self.enabled;
+
         self.enabled = value & 0x80 != 0;
         self.window_map = value & 0x40 != 0;
         self.window_enabled = value & 0x20 != 0;
@@ -222,6 +248,12 @@ impl Ppu {
         self.sprite_size = value & 0x04 != 0;
         self.sprite_enabled = value & 0x02 != 0;
         self.bg_enabled = value & 0x01 != 0;
+
+        if old_enabled && !self.enabled {
+            self.ly = 0;
+            self.cycles = 0;
+            self.mode = Mode::HBlank;
+        }
     }
 
     pub const fn read_stat(&self) -> u8 {
@@ -238,12 +270,11 @@ impl Ppu {
         if self.mode0_intr_select {
             bits |= 0x08;
         }
-        if self.ly == self.lyc {
+        if self.ly == self.lyc
+        {
             bits |= 0x04;
         }
-        if self.enabled {
-            bits |= self.mode as u8;
-        }
+        bits |= self.mode as u8;
         bits
     }
 
