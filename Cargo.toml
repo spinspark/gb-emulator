@@ -22,7 +22,7 @@ members = ["core"]
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
-repository = "https://github.com/justy777/gb-emulator"
+repository = "https://github.com/spinspark/gb-emulator"
 categories = ["emulators"]
 keywords = ["gb", "dmg"]
 

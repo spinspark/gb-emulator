@@ -1,5 +1,5 @@
 # `gb_core`
-![GitHub License](https://img.shields.io/github/license/justy777/gb-emulator)
+![GitHub License](https://img.shields.io/github/license/spinspark/gb-emulator)
 
 `gb_core` holds the emulated hardware for a Game Boy (DMG).
 
